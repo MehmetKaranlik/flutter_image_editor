@@ -17,7 +17,6 @@ import 'widget/float_text_widget.dart';
 import 'widget/image_editor_delegate.dart';
 import 'widget/text_editor_page.dart';
 
-
 ///The editor's result.
 class EditorImageResult {
   ///image width
@@ -33,16 +32,24 @@ class EditorImageResult {
 }
 
 class ImageEditor extends StatefulWidget {
-
-  const ImageEditor({Key? key, required this.originImage, this.savePath}) : super(key: key);
+  const ImageEditor({
+    Key? key,
+    required this.originImage,
+    this.savePath,
+    required this.onSaved,
+  }) : super(key: key);
 
   ///origin image
   /// * input for edit
-  final File originImage;
+  final String originImage;
 
   ///edited-file's save path.
   /// * if null will save in temporary file.
   final Directory? savePath;
+
+  /// callback to call after successfull or not saving image
+
+  final VoidCallback onSaved;
 
   ///[uiDelegate] is determine the editor's ui style.
   ///You can extends [ImageEditorDelegate] and custome it by youself.
@@ -55,7 +62,13 @@ class ImageEditor extends StatefulWidget {
 }
 
 class ImageEditorState extends State<ImageEditor>
-    with SignatureBinding, ScreenShotBinding, TextCanvasBinding, RotateCanvasBinding, LittleWidgetBinding, WindowUiBinding {
+    with
+        SignatureBinding,
+        ScreenShotBinding,
+        TextCanvasBinding,
+        RotateCanvasBinding,
+        LittleWidgetBinding,
+        WindowUiBinding {
   final EditorPanelController _panelController = EditorPanelController();
 
   double get headerHeight => windowStatusBarHeight;
@@ -76,19 +89,16 @@ class ImageEditorState extends State<ImageEditor>
       final file = await File('${paths.path}/' + DateTime.now().toString() + '.jpg').create();
       file.writeAsBytes(value ?? []);
       decodeImg().then((value) {
-        if (value == null) {
-          Navigator.pop(context);
-        } else {
-          Navigator.pop(context, EditorImageResult(value.width, value.height, file));
-        }
+        widget.onSaved();
       }).catchError((e) {
-        Navigator.pop(context);
+        print(e.toString());
+        //   Navigator.pop(context);
       });
     });
   }
 
   Future<ui.Image?> decodeImg() async {
-    return await decodeImageFromList(widget.originImage.readAsBytesSync());
+    return await decodeImageFromList(File(widget.originImage).readAsBytesSync());
   }
 
   static ImageEditorState? of(BuildContext context) {
@@ -120,20 +130,14 @@ class ImageEditorState extends State<ImageEditor>
                   builder: (ctx, value, child) {
                     return AnimatedPositioned(
                         top: value ? 0 : -headerHeight,
-                        left: 0, right: 0,
+                        left: 0,
+                        right: 0,
                         child: ValueListenableBuilder<bool>(
                             valueListenable: _panelController.takeShot,
                             builder: (ctx, value, child) {
                               return Opacity(
                                 opacity: value ? 0 : 1,
-                                child: AppBar(
-                                  iconTheme: IconThemeData(color: Colors.white, size: 16),
-                                  leading: backWidget(),
-                                  backgroundColor: Colors.transparent,
-                                  actions: [
-                                    resetWidget(onTap: resetCanvasPlate)
-                                  ],
-                                ),
+                                child: SizedBox.shrink(),
                               );
                             }),
                         duration: _panelController.panelDuration);
@@ -210,24 +214,23 @@ class ImageEditorState extends State<ImageEditor>
                 return Opacity(
                   opacity: _panelController.show2ndPanel() ? 1 : 0,
                   child: Row(
-                    mainAxisAlignment: value == OperateType.brush ?
-                        MainAxisAlignment.spaceAround : MainAxisAlignment.end,
+                    mainAxisAlignment:
+                        value == OperateType.brush ? MainAxisAlignment.spaceAround : MainAxisAlignment.end,
                     children: [
-                      if(value == OperateType.brush)
+                      if (value == OperateType.brush)
                         ..._panelController.brushColor
                             .map<Widget>((e) => CircleColorWidget(
-                          color: e,
-                          valueListenable: _panelController.colorSelected,
-                          onColorSelected: (color) {
-                            if(pColor.value == color.value) return;
-                            changePainterColor(color);
-                          },
-                        ))
+                                  color: e,
+                                  valueListenable: _panelController.colorSelected,
+                                  onColorSelected: (color) {
+                                    if (pColor.value == color.value) return;
+                                    changePainterColor(color);
+                                  },
+                                ))
                             .toList(),
                       35.hGap,
                       unDoWidget(onPressed: undo),
-                      if(value == OperateType.mosaic)
-                        7.hGap,
+                      if (value == OperateType.mosaic) 7.hGap,
                     ],
                   ),
                 );
@@ -266,7 +269,7 @@ class ImageEditorState extends State<ImageEditor>
       transform: Matrix4.rotationY(flipValue),
       child: Container(
         alignment: Alignment.center,
-        child: Image.file(widget.originImage),
+        child: Image.file(File(widget.originImage)),
       ),
     );
   }
@@ -279,17 +282,20 @@ class ImageEditorState extends State<ImageEditor>
           return Container(
             width: _panelController.tcSize.width,
             height: _panelController.tcSize.height,
-            decoration: BoxDecoration(
-                color: value,
-                borderRadius: BorderRadius.all(Radius.circular(8))
-            ),
+            decoration: BoxDecoration(color: value, borderRadius: BorderRadius.all(Radius.circular(8))),
             child: Column(
               children: [
                 12.vGap,
-                Icon(Icons.delete_outline, size: 32, color: Colors.white,),
+                Icon(
+                  Icons.delete_outline,
+                  size: 32,
+                  color: Colors.white,
+                ),
                 4.vGap,
-                Text(isActive ? 'move here for delete' : 'release to delete',
-                  style: TextStyle(color: Colors.white, fontSize: 12),)
+                Text(
+                  isActive ? 'move here for delete' : 'release to delete',
+                  style: TextStyle(color: Colors.white, fontSize: 12),
+                )
               ],
             ),
           );
@@ -316,7 +322,9 @@ class ImageEditorState extends State<ImageEditor>
                   txt,
                   style: TextStyle(
                       color: _panelController.isCurrentOperateType(type)
-                          ? const Color(0xFFFA4D32) : const Color(0xFF999999), fontSize: 11),
+                          ? const Color(0xFFFA4D32)
+                          : const Color(0xFF999999),
+                      fontSize: 11),
                 )
               ],
             ),
@@ -325,20 +333,18 @@ class ImageEditorState extends State<ImageEditor>
       ),
     );
   }
-
-
 }
 
 ///Little widget binding is for unified manage the widgets that has common style.
 /// * If you wanna custom this part, see [ImageEditorDelegate]
 mixin LittleWidgetBinding<T extends StatefulWidget> on State<T> {
-  
   ///go back widget
   Widget backWidget({VoidCallback? onPressed}) {
     return GestureDetector(
-      onTap: onPressed ?? () {
-        Navigator.pop(context);
-      },
+      onTap: onPressed ??
+          () {
+            Navigator.pop(context);
+          },
       child: ImageEditor.uiDelegate.buildBackWidget(),
     );
   }
@@ -347,7 +353,7 @@ mixin LittleWidgetBinding<T extends StatefulWidget> on State<T> {
   Widget getOperateTypeRes(OperateType type, {required bool choosen}) {
     return ImageEditor.uiDelegate.buildOperateWidget(type, choosen: choosen);
   }
-  
+
   ///action done widget
   Widget doneButtonWidget({VoidCallback? onPressed}) {
     return GestureDetector(
@@ -379,7 +385,7 @@ mixin LittleWidgetBinding<T extends StatefulWidget> on State<T> {
   ///reset button
   Widget resetWidget({VoidCallback? onTap}) {
     return Padding(
-      padding: EdgeInsets.only(top: 6, bottom: 6 , right: 16),
+      padding: EdgeInsets.only(top: 6, bottom: 6, right: 16),
       child: ValueListenableBuilder<OperateType>(
         valueListenable: realState?._panelController.operateType ?? ValueNotifier(OperateType.non),
         builder: (ctx, value, child) {
@@ -388,12 +394,12 @@ mixin LittleWidgetBinding<T extends StatefulWidget> on State<T> {
             child: GestureDetector(
               onTap: onTap,
               child: ImageEditor.uiDelegate.resetWidget,
-            ),);
+            ),
+          );
         },
       ),
     );
   }
-
 }
 
 ///This binding can make editor to roatate canvas
@@ -402,7 +408,6 @@ mixin LittleWidgetBinding<T extends StatefulWidget> on State<T> {
 /// * origin image is not maybe. if force to keep the relative path, will reduce
 /// * the paint-path area.
 mixin RotateCanvasBinding<T extends StatefulWidget> on State<T> {
-
   ///canvas rotate value
   /// * 90 angle each time.
   int rotateValue = 0;
@@ -427,11 +432,8 @@ mixin RotateCanvasBinding<T extends StatefulWidget> on State<T> {
   ///reset canvas
   void resetCanvasPlate() {
     rotateValue = 0;
-    setState(() {
-
-    });
+    setState(() {});
   }
-
 }
 
 ///text painting
@@ -455,10 +457,10 @@ mixin TextCanvasBinding<T extends StatefulWidget> on State<T> {
     realState?._panelController.hidePanel();
     Navigator.of(context)
         .push(PageRouteBuilder(
-        opaque: false,
-        pageBuilder: (BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
-          return TextEditorPage();
-        }))
+            opaque: false,
+            pageBuilder: (BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
+              return TextEditorPage();
+            }))
         .then((value) {
       realState?._panelController.showPanel();
       if (value is FloatTextModel) {
@@ -478,14 +480,14 @@ mixin TextCanvasBinding<T extends StatefulWidget> on State<T> {
         alignment: Alignment.center,
         children: textModels
             .map<Widget>((e) => Positioned(
-          child: _wrapWithGesture(
-              FloatTextWidget(
-                textModel: e,
-              ),
-              e),
-          left: e.left,
-          top: e.top,
-        ))
+                  child: _wrapWithGesture(
+                      FloatTextWidget(
+                        textModel: e,
+                      ),
+                      e),
+                  left: e.left,
+                  top: e.top,
+                ))
             .toList(),
       );
     });
@@ -531,7 +533,6 @@ mixin TextCanvasBinding<T extends StatefulWidget> on State<T> {
 
 ///drawing board
 mixin SignatureBinding<T extends StatefulWidget> on State<T> {
-
   DrawStyle get lastDrawStyle => painterController.drawStyle;
 
   ///Canvas layer for each draw action action.
@@ -559,7 +560,7 @@ mixin SignatureBinding<T extends StatefulWidget> on State<T> {
   ///switch painter's style
   /// * e.g. color、mosaic
   void switchPainterMode(DrawStyle style) {
-    if(lastDrawStyle == style) return;
+    if (lastDrawStyle == style) return;
     changePainterColor(pColor);
     painterController.drawStyle = style;
   }
@@ -575,7 +576,10 @@ mixin SignatureBinding<T extends StatefulWidget> on State<T> {
               painter: SignaturePainter(painterController),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(
-                    minWidth: double.infinity, minHeight: double.infinity, maxWidth: double.infinity, maxHeight: double.infinity),
+                    minWidth: double.infinity,
+                    minHeight: double.infinity,
+                    maxWidth: double.infinity,
+                    maxHeight: double.infinity),
               )),
         ));
     //savePath();
@@ -616,9 +620,12 @@ mixin SignatureBinding<T extends StatefulWidget> on State<T> {
     }
     return StatefulBuilder(builder: (ctx, canvasSetter) {
       this.canvasSetter = canvasSetter;
-      return realState?.ignoreWidgetByType(OperateType.brush, Stack(
-        children: pathRecord,
-      )) ?? SizedBox();
+      return realState?.ignoreWidgetByType(
+              OperateType.brush,
+              Stack(
+                children: pathRecord,
+              )) ??
+          SizedBox();
     });
   }
 
@@ -635,7 +642,6 @@ mixin ScreenShotBinding<T extends StatefulWidget> on State<T> {
 
 ///information about window
 mixin WindowUiBinding<T extends StatefulWidget> on State<T> {
-
   Size get windowSize => MediaQuery.of(context).size;
 
   double get windowStatusBarHeight => ui.window.padding.top;
@@ -645,7 +651,6 @@ mixin WindowUiBinding<T extends StatefulWidget> on State<T> {
   double get screenWidth => windowSize.width;
 
   double get screenHeight => windowSize.height;
-
 }
 
 extension _BaseImageEditorState on State {
@@ -667,7 +672,8 @@ class CircleColorWidget extends StatefulWidget {
 
   final OnColorSelected onColorSelected;
 
-  const CircleColorWidget({Key? key, required this.color, required this.valueListenable, required this.onColorSelected}) : super(key: key);
+  const CircleColorWidget({Key? key, required this.color, required this.valueListenable, required this.onColorSelected})
+      : super(key: key);
 
   @override
   State<StatefulWidget> createState() {
@@ -699,6 +705,4 @@ class CircleColorWidgetState extends State<CircleColorWidget> {
       ),
     );
   }
-
-
 }
